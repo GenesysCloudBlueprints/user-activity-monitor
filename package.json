@@ -1,0 +1,18 @@
+{
+  "name": "user-activity-monitor",
+  "version": "1.0.0",
+  "description": "AWS serverless project for monitoring user activity with EventBridge, Lambda (Go), and DynamoDB",
+  "scripts": {
+    "build": "cd lambda && make build",
+    "deploy": "./scripts/deploy.sh",
+    "deploy:prod": "./scripts/deploy.sh prod"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "serverless": "^3.38.0",
+    "serverless-plugin-log-retention": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

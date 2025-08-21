@@ -1,0 +1,134 @@
+service: user-activity-monitor
+
+frameworkVersion: "3"
+
+plugins:
+  - serverless-plugin-log-retention
+
+# Variables
+custom:
+  genesysCloud:
+    # Genesys Cloud details https://help.mypurecloud.com/articles/configure-the-amazon-eventbridge-integration/
+    genesysCloudOrgId: 00000000-0000-0000-0000-000000000000
+    genesysCloudEventSourceSuffix: user-activity-monitor
+    # Partner event source https://developer.genesys.cloud/notificationsalerts/notifications/event-bridge#manage-your-amazon-eventbridge-partner-source
+    eventSource: "aws.partner/genesys.com/cloud/${self:custom.genesysCloud.genesysCloudOrgId}/${self:custom.genesysCloud.genesysCloudEventSourceSuffix}"
+
+  # serverless-plugin-log-retention
+  logRetentionInDays: 1
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 30
+  environment:
+    DYNAMODB_TABLE: ${self:service}-${self:provider.stage}
+    LOG_LEVEL: INFO
+    GENESYS_API_DOMAIN: mypurecloud.com
+    GENESYS_CREDENTIALS_SECRET_NAME: user-activity-monitor-client-credentials
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - secretsmanager:GetSecretValue
+          Resource:
+            - "arn:aws:secretsmanager:${self:provider.region}:*:secret:${self:provider.environment.GENESYS_CREDENTIALS_SECRET_NAME}-*"
+  eventBridge:
+    useCloudFormation: true
+
+package:
+  individually: true
+  exclude:
+    - "**/*"
+
+functions:
+  MonitorUserActivity:
+    handler: bootstrap
+    package:
+      artifact:
+        - lambda/dist/monitorlambdafunction/monitorlambdafunction.zip
+    events:
+      - eventBridge:
+          eventBus: !GetAtt UserMonitorEventBus.Name
+          pattern:
+            source:
+              - ${self:custom.genesysCloud.eventSource}
+    environment:
+      DYNAMODB_TABLE: ${self:provider.environment.DYNAMODB_TABLE}
+      GENESYS_API_DOMAIN: ${self:provider.environment.GENESYS_API_DOMAIN}
+    tags:
+      Service: ${self:service}
+      Environment: ${self:provider.stage}
+      Function: MonitorUserActivity
+
+resources:
+  Resources:
+    UserActivityTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        AttributeDefinitions:
+          - AttributeName: _pk
+            AttributeType: S
+          - AttributeName: _sk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: _pk
+            KeyType: HASH
+          - AttributeName: _sk
+            KeyType: RANGE
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Environment
+            Value: ${self:provider.stage}
+        TimeToLiveSpecification:
+          AttributeName: _ttl
+          Enabled: true
+
+    UserMonitorEventBus:
+      Type: AWS::Events::EventBus
+      Properties:
+        Name: ${self:custom.genesysCloud.eventSource}
+        EventSourceName: ${self:custom.genesysCloud.eventSource}
+
+    CloudFormationCreatedSecret:
+      Type: "AWS::SecretsManager::Secret"
+      Properties:
+        Name: ${self:provider.environment.GENESYS_CREDENTIALS_SECRET_NAME}
+        Description: Simple secret created by AWS CloudFormation
+        # SecretString seeds the secret with placeholders -- DO NOT PUT YOUR SECRETS HERE! Set them via the AWS console
+        # https://us-east-1.console.aws.amazon.com/secretsmanager/secret?name=user-activity-monitor-client-credentials&region=us-east-1
+        SecretString: |
+          {
+            "clientId": "YOUR_CLIENT_ID",
+            "clientSecret": "YOUR_CLIENT_SECRET"
+          }
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Environment
+            Value: ${self:provider.stage}
