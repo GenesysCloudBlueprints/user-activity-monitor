@@ -40,7 +40,7 @@ func processPresenceEvent(userID string, event apitypes.PresenceEventBody) error
 	}
 
 	// Write to database
-	if err := db.WriteUserActivity(*ua); err != nil {
+	if err := db.WriteUserActivity(*ua, false); err != nil {
 		fmt.Printf("failed to write user activity: %v\n", err)
 	}
 
@@ -80,7 +80,7 @@ func processConversationSummaryEvent(userID string, event apitypes.ConversationS
 	}
 
 	// Write to database
-	if err := db.WriteUserActivity(*ua); err != nil {
+	if err := db.WriteUserActivity(*ua, false); err != nil {
 		fmt.Printf("failed to write user activity: %v\n", err)
 	}
 

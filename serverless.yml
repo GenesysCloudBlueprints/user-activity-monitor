@@ -15,7 +15,7 @@ custom:
     eventSource: "aws.partner/genesys.com/cloud/${self:custom.genesysCloud.genesysCloudOrgId}/${self:custom.genesysCloud.genesysCloudEventSourceSuffix}"
 
   # serverless-plugin-log-retention
-  logRetentionInDays: 1
+  logRetentionInDays: 30
 
 provider:
   name: aws
@@ -26,7 +26,7 @@ provider:
   timeout: 30
   environment:
     DYNAMODB_TABLE: ${self:service}-${self:provider.stage}
-    LOG_LEVEL: INFO
+    DYNAMODB_GSI_LIST: ${self:service}-${self:provider.stage}-list-gsi
     GENESYS_API_DOMAIN: mypurecloud.com
     GENESYS_CREDENTIALS_SECRET_NAME: user-activity-monitor-client-credentials
   iam:
@@ -42,6 +42,7 @@ provider:
             - dynamodb:DeleteItem
           Resource:
             - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}/index/${self:provider.environment.DYNAMODB_GSI_LIST}"
         - Effect: Allow
           Action:
             - logs:CreateLogGroup
@@ -75,11 +76,28 @@ functions:
               - ${self:custom.genesysCloud.eventSource}
     environment:
       DYNAMODB_TABLE: ${self:provider.environment.DYNAMODB_TABLE}
+      DYNAMODB_GSI_LIST: ${self:provider.environment.DYNAMODB_GSI_LIST}
       GENESYS_API_DOMAIN: ${self:provider.environment.GENESYS_API_DOMAIN}
     tags:
       Service: ${self:service}
       Environment: ${self:provider.stage}
-      Function: MonitorUserActivity
+
+  ActivityReaper:
+    handler: bootstrap
+    package:
+      artifact:
+        - lambda/dist/reaperlambdafunction/reaperlambdafunction.zip
+    events:
+      - schedule:
+          rate: rate(5 minutes)
+          enabled: true
+    environment:
+      DYNAMODB_TABLE: ${self:provider.environment.DYNAMODB_TABLE}
+      DYNAMODB_GSI_LIST: ${self:provider.environment.DYNAMODB_GSI_LIST}
+      GENESYS_API_DOMAIN: ${self:provider.environment.GENESYS_API_DOMAIN}
+    tags:
+      Service: ${self:service}
+      Environment: ${self:provider.stage}
 
 resources:
   Resources:
@@ -95,11 +113,24 @@ resources:
             AttributeType: S
           - AttributeName: _sk
             AttributeType: S
+          - AttributeName: _gsi_list_pk
+            AttributeType: S
+          - AttributeName: _gsi_list_sk
+            AttributeType: S
         KeySchema:
           - AttributeName: _pk
             KeyType: HASH
           - AttributeName: _sk
             KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: ${self:provider.environment.DYNAMODB_GSI_LIST}
+            KeySchema:
+              - AttributeName: _gsi_list_pk
+                KeyType: HASH
+              - AttributeName: _gsi_list_sk
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
         Tags:
           - Key: Service
             Value: ${self:service}

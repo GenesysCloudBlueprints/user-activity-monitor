@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"strings"
 	"time"
 	"user-activity-monitor/src/apitypes"
 	"user-activity-monitor/src/genesys"
@@ -13,13 +14,20 @@ import (
  * https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue#Marshal
  */
 
-const userActivityPrefix = "ua"
+const (
+	userActivityPrefix = "ua"
+)
 
 // singleTableEntity provides the PK and SK for a single table entity
 type singleTableEntity struct {
 	PartitionKey string `json:"_pk" dynamodbav:"_pk"`
 	SortKey      string `json:"_sk" dynamodbav:"_sk"`
 	TTL          *int64 `json:"_ttl,omitempty" dynamodbav:"_ttl,omitempty"`
+}
+
+type singleTableEntityListGSI struct {
+	ListItemGSIPK string `json:"_gsi_list_pk" dynamodbav:"_gsi_list_pk"`
+	ListItemGSISK string `json:"_gsi_list_sk" dynamodbav:"_gsi_list_sk"`
 }
 
 // UserActivity indicates the last known activity for a user
@@ -30,11 +38,13 @@ type UserActivity struct {
 	Conversing          bool   `json:"conversing" dynamodbav:"conversing"`
 	GroupID             string `json:"groupId" dynamodbav:"groupId"`
 	InactivityTTL       *int64 `json:"inactivityTTL" dynamodbav:"inactivityTTL"`
+	LastUpdated         int64  `json:"lastUpdated" dynamodbav:"lastUpdated"`
 }
 
 // UserActivityEntity is an aggregate type for the DB record for a UserActivity object
 type UserActivityEntity struct {
 	singleTableEntity
+	singleTableEntityListGSI
 	UserActivity
 }
 
@@ -46,6 +56,23 @@ func UserActivitySK(userID string) string {
 	return fmt.Sprintf("%s|%s", userActivityPrefix, userID)
 }
 
+func UserActivityListGSIPK(inactivityTTL *int64) string {
+	status := "pending"
+	if inactivityTTL == nil || *inactivityTTL < time.Now().UnixMilli() {
+		status = "inactive"
+	}
+
+	return strings.ToLower(fmt.Sprintf("%s|%s", userActivityPrefix, status))
+}
+
+func UserActivityListGSISK(inactivityTTL *int64) string {
+	if inactivityTTL == nil {
+		return "0"
+	}
+
+	return fmt.Sprintf("%v", *inactivityTTL)
+}
+
 func (ua UserActivity) PK() string {
 	return UserActivityPK(ua.UserID)
 }
@@ -54,13 +81,25 @@ func (ua UserActivity) SK() string {
 	return UserActivitySK(ua.UserID)
 }
 
+func (ua UserActivity) ListGSIPK() string {
+	return UserActivityListGSIPK(ua.InactivityTTL)
+}
+
+func (ua UserActivity) ListGSISK() string {
+	return UserActivityListGSISK(ua.InactivityTTL)
+}
+
 // Entity creates a DB entity from the UserActivity object
 func (ua UserActivity) Entity() UserActivityEntity {
 	return UserActivityEntity{
 		singleTableEntity: singleTableEntity{
 			PartitionKey: ua.PK(),
 			SortKey:      ua.SK(),
-			TTL:          &[]int64{time.Now().AddDate(0, 0, 7).UnixMilli()}[0],
+			TTL:          &[]int64{time.Now().AddDate(0, 1, 0).UnixMilli()}[0],
+		},
+		singleTableEntityListGSI: singleTableEntityListGSI{
+			ListItemGSIPK: ua.ListGSIPK(),
+			ListItemGSISK: ua.ListGSISK(),
 		},
 		UserActivity: ua,
 	}
@@ -78,7 +117,11 @@ func (ua *UserActivity) ClearInactivityTTL() {
 
 // RefreshInactivityTTL refreshes the inactivity TTL based on the assigned timeout group
 func (ua *UserActivity) RefreshInactivityTTL() {
-	ua.SetInactivityTTL(time.Duration(groupconfig.TimeoutGroups[ua.GroupID].TimeoutMinutes) * time.Minute)
+	if ua.GroupID == "" {
+		ua.ClearInactivityTTL()
+	} else {
+		ua.SetInactivityTTL(time.Duration(groupconfig.TimeoutGroups[ua.GroupID].TimeoutMinutes) * time.Minute)
+	}
 }
 
 // CheckActivity checks the current activity data and sets the inactivity TTL accordingly

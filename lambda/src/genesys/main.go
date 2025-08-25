@@ -31,6 +31,10 @@ const (
 )
 
 func init() {
+	Reauth()
+}
+
+func Reauth() error {
 	config, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	if err != nil {
 		log.Fatal(err)
@@ -64,6 +68,8 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	return nil
 }
 
 func GetUser(userID string) (*GenesysUser, error) {
@@ -75,6 +81,39 @@ func GetUser(userID string) (*GenesysUser, error) {
 	}
 
 	return &response, nil
+}
+
+func LogoutUser(userID string) error {
+	fmt.Printf("Logging out Genesys user: %s\n", userID)
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 16 * time.Second,
+	}
+
+	// Create request
+	url := fmt.Sprintf("https://api.%s/api/v2/tokens/%s", genesysAPIDomain, userID)
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	// Make the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
 }
 
 func apiGet(urlPath string, response interface{}) error {

@@ -20,19 +20,23 @@ fi
 STAGE=${1:-dev}
 echo "📋 Deploying to stage: $STAGE"
 
-# Build the Go binary for Lambda
-echo "🔨 Building Go binary..."
+# Build the Go binaries for Lambda
+echo "🔨 Building Go binaries..."
 cd lambda
 make clean build
 cd ..
 
 # Check if build was successful
 if [ ! -f "lambda/dist/monitorlambdafunction/monitorlambdafunction.zip" ]; then
-    echo "❌ Failed to build Go binary"
+    echo "❌ Failed to build monitorlambdafunction"
+    exit 1
+fi
+if [ ! -f "lambda/dist/reaperlambdafunction/reaperlambdafunction.zip" ]; then
+    echo "❌ Failed to build reaperlambdafunction"
     exit 1
 fi
 
-echo "✅ Go binary built successfully"
+echo "✅ Go binaries built successfully"
 
 # Deploy using Serverless Framework
 echo "☁️  Deploying to AWS..."

@@ -9,6 +9,8 @@ build:
 	@echo "Building Go binary for Lambda..."
 	GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o dist/monitorlambdafunction/bootstrap src/monitorlambdafunction/*.go
 	cd dist/monitorlambdafunction && zip monitorlambdafunction.zip bootstrap
+	GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o dist/reaperlambdafunction/bootstrap src/reaperlambdafunction/*.go
+	cd dist/reaperlambdafunction && zip reaperlambdafunction.zip bootstrap
 	@echo "Build completed successfully!"
 
 # Deploy to dev environment
