@@ -13,6 +13,7 @@ custom:
     genesysCloudEventSourceSuffix: user-activity-monitor
     # Partner event source https://developer.genesys.cloud/notificationsalerts/notifications/event-bridge#manage-your-amazon-eventbridge-partner-source
     eventSource: "aws.partner/genesys.com/cloud/${self:custom.genesysCloud.genesysCloudOrgId}/${self:custom.genesysCloud.genesysCloudEventSourceSuffix}"
+    implicitGrantClientId: 00000000-0000-0000-0000-000000000000
 
   # serverless-plugin-log-retention
   logRetentionInDays: 30
@@ -24,6 +25,8 @@ provider:
   stage: ${opt:stage, 'dev'}
   memorySize: 512
   timeout: 30
+  apiGateway:
+    stage: deploy
   environment:
     DYNAMODB_TABLE: ${self:service}-${self:provider.stage}
     DYNAMODB_GSI_LIST: ${self:service}-${self:provider.stage}-list-gsi
@@ -98,6 +101,28 @@ functions:
     tags:
       Service: ${self:service}
       Environment: ${self:provider.stage}
+
+  GenerateReport:
+    handler: bootstrap
+    package:
+      artifact:
+        - lambda/dist/reportlambdafunction/reportlambdafunction.zip
+    events:
+      - http:
+          path: /report
+          method: GET
+      - http:
+          path: /report/data
+          method: GET
+    environment:
+      DYNAMODB_TABLE: ${self:provider.environment.DYNAMODB_TABLE}
+      DYNAMODB_GSI_LIST: ${self:provider.environment.DYNAMODB_GSI_LIST}
+      EXPECTED_ORGANIZATION_ID: ${self:custom.genesysCloud.genesysCloudOrgId}
+      IMPLICIT_GRANT_CLIENT_ID: ${self:custom.genesysCloud.implicitGrantClientId}
+    tags:
+      Service: ${self:service}
+      Environment: ${self:provider.stage}
+      Function: GenerateReport
 
 resources:
   Resources:

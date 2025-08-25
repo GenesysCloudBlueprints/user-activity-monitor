@@ -115,7 +115,7 @@ func GetUserActivity(userID string) (*UserActivity, error) {
 func ListUserActivity(pending bool, beforeTime *int64) ([]UserActivity, error) {
 	status := "pending"
 	if !pending {
-		status = "inactive"
+		status = "exempt"
 	}
 
 	// Define query conditions
@@ -145,21 +145,37 @@ func ListUserActivity(pending bool, beforeTime *int64) ([]UserActivity, error) {
 		fmt.Printf("Query: %s\n", string(queryBytes))
 	}
 
-	result, err := client.Query(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query UserActivity from DynamoDB: %v", err)
-	}
-
-	// Unmarshal the results into UserActivityEntity objects
+	// Collect all results across all pages
 	var uaList []UserActivity
-	for _, item := range result.Items {
-		var ua UserActivityEntity
-		err := attributevalue.UnmarshalMap(item, &ua)
-		if err != nil {
-			fmt.Printf("Warning: failed to unmarshal item: %v\n", err)
-			continue
+	var lastEvaluatedKey map[string]types.AttributeValue
+
+	for {
+		// Set the exclusive start key for pagination
+		if lastEvaluatedKey != nil {
+			query.ExclusiveStartKey = lastEvaluatedKey
 		}
-		uaList = append(uaList, ua.UserActivity)
+
+		result, err := client.Query(ctx, query)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query UserActivity from DynamoDB: %v", err)
+		}
+
+		// Process items from this page
+		for _, item := range result.Items {
+			var ua UserActivityEntity
+			err := attributevalue.UnmarshalMap(item, &ua)
+			if err != nil {
+				fmt.Printf("Warning: failed to unmarshal item: %v\n", err)
+				continue
+			}
+			uaList = append(uaList, ua.UserActivity)
+		}
+
+		// Check if there are more pages
+		if result.LastEvaluatedKey == nil {
+			break
+		}
+		lastEvaluatedKey = result.LastEvaluatedKey
 	}
 
 	return uaList, nil

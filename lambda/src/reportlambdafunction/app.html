@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Activity Monitor Report</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f5f7fa;
+        color: #333;
+      }
+
+      .container {
+        max-width: 100%;
+        margin: 0;
+        background: white;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        text-align: center;
+      }
+
+      .header h1 {
+        margin: 0;
+        font-size: 2.5em;
+        font-weight: 300;
+      }
+
+      .header p {
+        margin: 10px 0 0 0;
+        opacity: 0.9;
+        font-size: 1.1em;
+      }
+
+      .refresh-button {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        margin-top: 15px;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+      }
+
+      .refresh-button:hover {
+        background: rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: translateY(-2px);
+      }
+
+      .content {
+        padding: 20px;
+      }
+
+      .auth-section {
+        text-align: center;
+        padding: 20px;
+      }
+
+      .auth-button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: background-color 0.3s;
+      }
+
+      .auth-button:hover {
+        background: #0056b3;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 20px;
+        color: #666;
+      }
+
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .data-section {
+        margin-top: 20px;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+
+      .stat-card {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+        text-align: center;
+        border-left: 4px solid #007bff;
+      }
+
+      .stat-number {
+        font-size: 2em;
+        font-weight: bold;
+        color: #007bff;
+        margin-bottom: 5px;
+      }
+
+      .stat-label {
+        color: #666;
+        font-size: 0.9em;
+      }
+
+      .table-container {
+        overflow-x: auto;
+        margin-top: 15px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 0;
+        overflow: hidden;
+        box-shadow: none;
+      }
+
+      th,
+      td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+      }
+
+      th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.9em;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .sortable {
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+        transition: background-color 0.2s ease;
+      }
+
+      .sortable:hover {
+        background-color: #e9ecef;
+      }
+
+      .sort-indicator {
+        display: inline-block;
+        margin-left: 8px;
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        opacity: 0.5;
+      }
+
+      .sort-asc .sort-indicator {
+        border-bottom: 6px solid #007bff;
+        opacity: 1;
+      }
+
+      .sort-desc .sort-indicator {
+        border-top: 6px solid #007bff;
+        opacity: 1;
+      }
+
+      tr:hover {
+        background-color: #f8f9fa;
+      }
+
+      .status-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 500;
+        text-transform: uppercase;
+      }
+
+      .status-pending {
+        background-color: #fff3cd;
+        color: #856404;
+      }
+
+      .status-exempt {
+        background-color: #cccccc;
+        color: #3a3a3a;
+      }
+
+      .presence-on-queue {
+        color: #52cef8;
+        background-color: #e9f7fe;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .presence-away {
+        color: #ffbb33;
+        background-color: #fff7e6;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .presence-offline {
+        color: #666666;
+        background-color: #f2f2f2;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .presence-available {
+        color: #77dd22;
+        background-color: #f0f9e6;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .presence-busy {
+        color: #ff0000;
+        background-color: #ffe6e6;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .error-message {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 12px;
+        border-radius: 6px;
+        margin: 15px 0;
+        border-left: 4px solid #dc3545;
+      }
+
+      .timestamp {
+        color: #666;
+        font-size: 0.9em;
+        font-style: italic;
+        margin-top: 15px;
+      }
+
+      .user-cell {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+      }
+
+      .user-info {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .user-name {
+        font-weight: 500;
+        color: #333;
+      }
+
+      .user-id {
+        font-size: 0.8em;
+        color: #666;
+        font-family: monospace;
+      }
+
+      .status-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .presence-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .conversing-indicator {
+        font-size: 1.1em;
+        margin-left: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>User Activity Monitor</h1>
+        <p>User activity report</p>
+        <button
+          id="refresh-button"
+          class="refresh-button"
+          onclick="refreshPage()"
+        >
+          🔄 Refresh
+        </button>
+      </div>
+
+      <div class="content">
+        <div id="auth-section" class="auth-section" style="display: none">
+          <h2>Authentication Required</h2>
+          <p>Please authenticate with Genesys Cloud to view the report.</p>
+          <a href="#" id="login-button" class="auth-button"
+            >Login with Genesys Cloud</a
+          >
+        </div>
+
+        <div id="loading-section" class="loading" style="display: none">
+          <div class="spinner"></div>
+          <p>Loading report data...</p>
+        </div>
+
+        <div id="error-section" style="display: none"></div>
+
+        <div id="data-section" class="data-section" style="display: none">
+          <div class="stats-grid" id="stats-grid"></div>
+          <div class="table-container">
+            <table id="data-table">
+              <thead>
+                <tr>
+                  <th
+                    class="sortable"
+                    data-column="userName"
+                    onclick="sortTable('userName')"
+                  >
+                    User <span class="sort-indicator"></span>
+                  </th>
+                  <th
+                    class="sortable"
+                    data-column="presence"
+                    onclick="sortTable('presence')"
+                  >
+                    Status <span class="sort-indicator"></span>
+                  </th>
+                  <th
+                    class="sortable"
+                    data-column="lastUpdated"
+                    onclick="sortTable('lastUpdated')"
+                  >
+                    Last Updated <span class="sort-indicator"></span>
+                  </th>
+                  <th
+                    class="sortable"
+                    data-column="status"
+                    onclick="sortTable('status')"
+                  >
+                    Status <span class="sort-indicator"></span>
+                  </th>
+                  <th
+                    class="sortable"
+                    data-column="groupName"
+                    onclick="sortTable('groupName')"
+                  >
+                    Group Name <span class="sort-indicator"></span>
+                  </th>
+                  <th
+                    class="sortable"
+                    data-column="inactivityTTL"
+                    onclick="sortTable('inactivityTTL')"
+                  >
+                    Inactivity TTL <span class="sort-indicator"></span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="table-body"></tbody>
+            </table>
+          </div>
+          <div class="timestamp">
+            <p>Report generated: <span id="report-timestamp"></span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Configuration
+      const CLIENT_ID = "55de9794-1505-4c7f-9316-d456cd5e8fd9";
+      const REDIRECT_URI = window.location.origin + "/deploy/report";
+      const AUTH_URL = `https://login.mypurecloud.com/oauth/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(
+        REDIRECT_URI
+      )}`;
+
+      // DOM elements
+      const authSection = document.getElementById("auth-section");
+      const loadingSection = document.getElementById("loading-section");
+      const errorSection = document.getElementById("error-section");
+      const dataSection = document.getElementById("data-section");
+      const loginButton = document.getElementById("login-button");
+      const statsGrid = document.getElementById("stats-grid");
+      const tableBody = document.getElementById("table-body");
+      const reportTimestamp = document.getElementById("report-timestamp");
+
+      // Sorting state
+      let currentSortColumn = null;
+      let currentSortDirection = null;
+      let tableData = [];
+
+      // Initialize the application
+      document.addEventListener("DOMContentLoaded", function () {
+        initializeApp();
+      });
+
+      function initializeApp() {
+        // Check for access token in URL fragment first
+        checkUrlFragment();
+
+        // Then check local storage
+        const token = localStorage.getItem("genesys_auth_token");
+
+        if (token) {
+          // Token exists, load data
+          loadReportData(token);
+        } else {
+          // No token, show auth section
+          showAuthSection();
+        }
+      }
+
+      function checkUrlFragment() {
+        const fragment = window.location.hash.substring(1);
+        const params = new URLSearchParams(fragment);
+        const accessToken = params.get("access_token");
+
+        if (accessToken) {
+          // Store token in local storage
+          localStorage.setItem("genesys_auth_token", accessToken);
+
+          // Remove the fragment from URL
+          window.location.hash = "";
+
+          // Reload the page to start fresh
+          window.location.reload();
+        }
+      }
+
+      function showAuthSection() {
+        authSection.style.display = "block";
+        loadingSection.style.display = "none";
+        dataSection.style.display = "none";
+        errorSection.style.display = "none";
+
+        // Set up login button
+        loginButton.href = AUTH_URL;
+      }
+
+      function showLoading() {
+        authSection.style.display = "none";
+        loadingSection.style.display = "block";
+        dataSection.style.display = "none";
+        errorSection.style.display = "none";
+      }
+
+      function showError(message) {
+        errorSection.innerHTML = `<div class="error-message">${message}</div>`;
+        errorSection.style.display = "block";
+        authSection.style.display = "none";
+        loadingSection.style.display = "none";
+        dataSection.style.display = "none";
+      }
+
+      function showData() {
+        authSection.style.display = "none";
+        loadingSection.style.display = "none";
+        errorSection.style.display = "none";
+        dataSection.style.display = "block";
+      }
+
+      async function loadReportData(token) {
+        showLoading();
+
+        try {
+          const response = await fetch("/deploy/report/data", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            if (response.status === 401) {
+              // Token expired or invalid, clear it and show auth
+              localStorage.removeItem("genesys_auth_token");
+              showAuthSection();
+              return;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          displayReportData(data);
+          showData();
+        } catch (error) {
+          console.error("Error loading report data:", error);
+          showError(`Failed to load report data: ${error.message}`);
+        }
+      }
+
+      function displayReportData(data) {
+        if (!Array.isArray(data) || data.length === 0) {
+          showError("No data available to display.");
+          return;
+        }
+
+        // Store the data for sorting
+        tableData = [...data];
+
+        // Calculate statistics
+        const totalUsers = data.length;
+        const pendingUsers = data.filter(
+          (item) => item.status === "pending"
+        ).length;
+        const exemptUsers = data.filter(
+          (item) => item.status === "exempt"
+        ).length;
+
+        // Display statistics
+        statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${totalUsers}</div>
+                    <div class="stat-label">Total Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${pendingUsers}</div>
+                    <div class="stat-label">Pending Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${exemptUsers}</div>
+                    <div class="stat-label">Exempt Users</div>
+                </div>
+            `;
+
+        // Display table data
+        tableBody.innerHTML = "";
+        data.forEach((item) => {
+          const row = document.createElement("tr");
+
+          const statusClass =
+            item.status === "pending" ? "status-pending" : "status-exempt";
+          const statusText = item.status === "pending" ? "Pending" : "Exempt";
+
+          // Determine presence class based on the presence value
+          const presenceClass = getPresenceClass(item.presence);
+
+          row.innerHTML = `<td>${item.userName || "N/A"}</td>
+<td>${item.userId || "N/A"}</td>
+<td><span class="${presenceClass}">${
+            item.secondaryPresenceName || "N/A"
+          }</span></td>
+<td>${item.conversing ? "📞" : ""}</td>
+<td>${formatTimestamp(item.lastUpdated)}</td>
+<td><span class="status-badge ${statusClass}">${statusText}</span></td>
+<td>${item.groupName || "N/A"}</td>
+<td>${formatTimestamp(item.inactivityTTL)}</td>
+                 `;
+
+          tableBody.appendChild(row);
+        });
+
+        // Set report timestamp
+        reportTimestamp.textContent = new Date().toLocaleString();
+
+        // Render the table with current data
+        renderTable();
+      }
+
+      function renderTable() {
+        if (!tableData || tableData.length === 0) return;
+
+        // Clear existing table body
+        tableBody.innerHTML = "";
+
+        // Render each row
+        tableData.forEach((item) => {
+          const row = document.createElement("tr");
+
+          const statusClass =
+            item.status === "pending" ? "status-pending" : "status-exempt";
+          const statusText = item.status === "pending" ? "Pending" : "Exempt";
+
+          // Determine presence class based on the presence value
+          const presenceClass = getPresenceClass(item.presence);
+
+          // Create user cell with profile image and name
+          const userCell = createUserCell(item);
+
+          // Create combined status cell with presence and conversing
+          const statusCell = createStatusCell(
+            item,
+            presenceClass,
+            statusClass,
+            statusText
+          );
+
+          row.innerHTML = `<td title="User ID: ${
+            item.userId || "unknown"
+          }">${userCell}</td>
+ <td>${statusCell}</td>
+ <td>${formatTimestamp(item.lastUpdated)}</td>
+ <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+ <td>${item.groupName || "N/A"}</td>
+ <td>${formatTimestamp(item.inactivityTTL)}</td>`;
+
+          tableBody.appendChild(row);
+        });
+      }
+
+      function formatTimestamp(timestamp) {
+        if (!timestamp) return "N/A";
+
+        try {
+          const date = new Date(timestamp);
+          if (isNaN(date.getTime())) return "N/A";
+
+          return date.toLocaleString();
+        } catch (error) {
+          return "N/A";
+        }
+      }
+
+      function getPresenceClass(presenceName) {
+        if (!presenceName) return "";
+
+        const presence = presenceName.toUpperCase();
+
+        switch (presence) {
+          case "AVAILABLE":
+            return "presence-available";
+          case "AWAY":
+          case "BREAK":
+          case "MEAL":
+          case "TRAINING":
+            return "presence-away";
+          case "ON_QUEUE":
+          case "IDLE":
+            return "presence-on-queue";
+          case "OFFLINE":
+            return "presence-offline";
+          case "BUSY":
+          case "MEETING":
+            return "presence-busy";
+          default:
+            return "";
+        }
+      }
+
+      function getPresenceColor(presenceName) {
+        if (!presenceName) return "#666666";
+
+        const presence = presenceName.toUpperCase();
+
+        switch (presence) {
+          case "AVAILABLE":
+            return "#77dd22";
+          case "AWAY":
+          case "BREAK":
+          case "MEAL":
+          case "TRAINING":
+            return "#ffbb33";
+          case "ON_QUEUE":
+          case "IDLE":
+            return "#52cef8";
+          case "OFFLINE":
+            return "#666666";
+          case "BUSY":
+          case "MEETING":
+            return "#ff0000";
+          default:
+            return "#666666";
+        }
+      }
+
+      // Handle logout (optional feature)
+      function logout() {
+        localStorage.removeItem("genesys_auth_token");
+        window.location.reload();
+      }
+
+      // Handle refresh button click
+      function refreshPage() {
+        window.location.reload();
+      }
+
+      function createUserCell(item) {
+        const presenceClass = getPresenceClass(item.presence);
+        const presenceColor = getPresenceColor(item.presence);
+
+        let userImageHtml = "";
+        if (item.userImage && item.userImage !== "N/A") {
+          userImageHtml = `<img src="${item.userImage}" alt="Profile" class="user-avatar" style="border: 2px solid ${presenceColor};">`;
+        }
+
+        return `
+           <div class="user-cell">
+             ${userImageHtml}
+             <div class="user-info">
+               <div class="user-name">${
+                 item.userName || item.userId || "N/A"
+               }</div>
+               <div class="user-id">${item.userId || "N/A"}</div>
+             </div>
+           </div>
+         `;
+      }
+
+      function createStatusCell(item, presenceClass, statusClass, statusText) {
+        const presenceText = item.secondaryPresenceName || "N/A";
+        const conversingIcon = item.conversing ? "📞" : "";
+
+        return `
+           <div class="status-cell">
+             <div class="presence-status">
+               <span class="${presenceClass}">${presenceText}</span>
+               ${
+                 conversingIcon
+                   ? `<span class="conversing-indicator">${conversingIcon}</span>`
+                   : ""
+               }
+             </div>
+           </div>
+         `;
+      }
+
+      function sortTable(column) {
+        // Clear previous sort indicators
+        document.querySelectorAll("th").forEach((th) => {
+          th.classList.remove("sort-asc", "sort-desc");
+        });
+
+        // Determine sort direction
+        let newDirection;
+        if (currentSortColumn === column) {
+          // Same column clicked - cycle through states
+          if (currentSortDirection === "asc") {
+            newDirection = "desc";
+          } else if (currentSortDirection === "desc") {
+            newDirection = null; // Back to unsorted
+          } else {
+            newDirection = "asc";
+          }
+        } else {
+          // New column clicked - start with ascending
+          newDirection = "asc";
+        }
+
+        // Update sort state
+        currentSortColumn = column;
+        currentSortDirection = newDirection;
+
+        // Apply sort indicator to current column
+        if (newDirection) {
+          const header = document.querySelector(`th[data-column="${column}"]`);
+          header.classList.add(`sort-${newDirection}`);
+        }
+
+        // Sort the data if needed
+        if (newDirection) {
+          tableData.sort((a, b) => {
+            let aVal = a[column];
+            let bVal = b[column];
+
+            // Handle null/undefined values
+            if (aVal == null) aVal = "";
+            if (bVal == null) bVal = "";
+
+            // Convert to strings for comparison
+            aVal = String(aVal).toLowerCase();
+            bVal = String(bVal).toLowerCase();
+
+            let comparison = 0;
+            if (aVal < bVal) comparison = -1;
+            if (aVal > bVal) comparison = 1;
+
+            return newDirection === "asc" ? comparison : -comparison;
+          });
+        } else {
+          // Reset to original order - reload data to restore original order
+          loadReportData(localStorage.getItem("genesys_auth_token"));
+          return;
+        }
+
+        // Re-render the table
+        renderTable();
+      }
+    </script>
+  </body>
+</html>

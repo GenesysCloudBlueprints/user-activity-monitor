@@ -1,6 +1,6 @@
 # User Activity Monitor
 
-The user activity monitor service monitors Genesys Cloud user presence and conversations to identify inactive users and terminate their sessions.
+The user activity monitor service monitors Genesys Cloud user presence and conversations to identify idle users and terminate their sessions.
 
 ## Project Overview
 

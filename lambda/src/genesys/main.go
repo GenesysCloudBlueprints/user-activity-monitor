@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -75,12 +76,63 @@ func Reauth() error {
 func GetUser(userID string) (*GenesysUser, error) {
 	var response GenesysUser
 
-	err := apiGet(fmt.Sprintf("/api/v2/users/%s?expand=groups,presence,conversationSummary", userID), &response)
+	err := apiGet(fmt.Sprintf("/api/v2/users/%s?expand=groups,presence,conversationSummary", url.QueryEscape(userID)), &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Genesys user: %w", err)
 	}
 
 	return &response, nil
+}
+
+func GetUsers(userIDs []string) (map[string]*GenesysUser, error) {
+	// Create map of users
+	users := make(map[string]*GenesysUser)
+
+	// Batch IDs into groups (API page size limit is 500)
+	const batchSize = 500
+
+	for i := 0; i < len(userIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(userIDs) {
+			end = len(userIDs)
+		}
+
+		// Get the current batch
+		batch := userIDs[i:end]
+
+		// Join batch ids with commas
+		ids := strings.Join(batch, ",")
+
+		// Get users for this batch
+		var response genesysUserResponse
+		err := apiGet(fmt.Sprintf("/api/v2/users?id=%s&pageSize=500", url.QueryEscape(ids)), &response)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Genesys users for batch %d-%d: %w", i+1, end, err)
+		}
+
+		// Add users from this batch to the result map
+		for _, user := range response.Entities {
+			users[user.ID] = &user
+		}
+	}
+
+	return users, nil
+}
+
+func GetPresences() (map[string]GenesysPresence, error) {
+	var response genesysPresenceResponse
+	err := apiGet("/api/v2/presence/definitions", &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Genesys presences: %w", err)
+	}
+
+	// Convert presences to a map of ID
+	presenceMap := make(map[string]GenesysPresence)
+	for _, presence := range response.Entities {
+		presenceMap[presence.ID] = presence
+	}
+
+	return presenceMap, nil
 }
 
 func LogoutUser(userID string) error {
@@ -91,7 +143,7 @@ func LogoutUser(userID string) error {
 	}
 
 	// Create request
-	url := fmt.Sprintf("https://api.%s/api/v2/tokens/%s", genesysAPIDomain, userID)
+	url := fmt.Sprintf("https://api.%s/api/v2/tokens/%s", genesysAPIDomain, url.PathEscape(userID))
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

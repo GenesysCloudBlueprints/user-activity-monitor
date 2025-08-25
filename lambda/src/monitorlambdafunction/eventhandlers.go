@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"user-activity-monitor/src/apitypes"
 	"user-activity-monitor/src/db"
 )
@@ -27,10 +28,16 @@ func processPresenceEvent(userID string, event apitypes.PresenceEventBody) error
 		fmt.Printf("User activity (1): %s\n", string(uaBytes))
 	}
 
-	// Set current presence
-	ua.Presence = event.PresenceDefinition.SystemPresence
+	if strings.EqualFold(ua.Presence, "OFFLINE") && !strings.EqualFold(event.PresenceDefinition.SystemPresence, "OFFLINE") {
+		// Refresh user's config when they come back online
+		ua.RefreshUser()
+	} else {
+		// Set current presence
+		ua.Presence = event.PresenceDefinition.SystemPresence
+		ua.SecondaryPresenceID = event.PresenceDefinition.ID
+	}
 
-	// Check if inactive
+	// Check
 	ua.CheckActivity()
 
 	// debug ua
@@ -70,7 +77,7 @@ func processConversationSummaryEvent(userID string, event apitypes.ConversationS
 	// Set current conversations
 	ua.UpdateConversations(event)
 
-	// Check if inactive
+	// Check
 	ua.CheckActivity()
 
 	// debug ua

@@ -59,7 +59,7 @@ func UserActivitySK(userID string) string {
 func UserActivityListGSIPK(inactivityTTL *int64) string {
 	status := "pending"
 	if inactivityTTL == nil || *inactivityTTL < time.Now().UnixMilli() {
-		status = "inactive"
+		status = "exempt"
 	}
 
 	return strings.ToLower(fmt.Sprintf("%s|%s", userActivityPrefix, status))

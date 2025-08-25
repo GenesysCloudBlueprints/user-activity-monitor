@@ -11,6 +11,8 @@ build:
 	cd dist/monitorlambdafunction && zip monitorlambdafunction.zip bootstrap
 	GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o dist/reaperlambdafunction/bootstrap src/reaperlambdafunction/*.go
 	cd dist/reaperlambdafunction && zip reaperlambdafunction.zip bootstrap
+	GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o dist/reportlambdafunction/bootstrap src/reportlambdafunction/*.go
+	cd dist/reportlambdafunction && zip reportlambdafunction.zip bootstrap
 	@echo "Build completed successfully!"
 
 # Deploy to dev environment
