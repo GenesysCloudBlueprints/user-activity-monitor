@@ -7,13 +7,13 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.38.0
 	github.com/aws/aws-sdk-go-v2/config v1.27.7
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.5
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.5
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.49.0
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.38.0
 )
 
 require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.7 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.5 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.15.3 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.3 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.3 // indirect

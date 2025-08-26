@@ -19,6 +19,8 @@ import (
 //go:embed app.html
 var appHTML embed.FS
 
+var genesysAPIDomain string = os.Getenv("GENESYS_API_DOMAIN")
+
 type Response struct {
 	StatusCode int               `json:"statusCode"`
 	Headers    map[string]string `json:"headers"`
@@ -183,7 +185,7 @@ func validateAuthorization(request events.APIGatewayProxyRequest) error {
 	}
 
 	// Make HTTP request to Genesys Cloud API
-	req, err := http.NewRequest("GET", "https://api.mypurecloud.com/api/v2/users/me?expand=organization", nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.%s/api/v2/users/me?expand=organization", genesysAPIDomain), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP request: %w", err)
 	}

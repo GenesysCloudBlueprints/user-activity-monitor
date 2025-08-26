@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -53,12 +52,6 @@ func WriteUserActivity(ua UserActivity, isLogoutAction bool) error {
 	av, err := attributevalue.MarshalMap(ua.Entity())
 	if err != nil {
 		return fmt.Errorf("failed to marshal UserActivity to DynamoDB: %v", err)
-	}
-
-	// debug av
-	avBytes, err := json.Marshal(av)
-	if err == nil {
-		fmt.Printf("User activity DB record (1): %s\n", string(avBytes))
 	}
 
 	// Write to DynamoDB
@@ -138,11 +131,6 @@ func ListUserActivity(pending bool, beforeTime *int64) ([]UserActivity, error) {
 		KeyConditionExpression:    expr.KeyCondition(),
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
-	}
-	// debug query
-	queryBytes, err := json.Marshal(query)
-	if err == nil {
-		fmt.Printf("Query: %s\n", string(queryBytes))
 	}
 
 	// Collect all results across all pages

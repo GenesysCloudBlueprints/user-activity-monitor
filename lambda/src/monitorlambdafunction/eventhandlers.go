@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"user-activity-monitor/src/apitypes"
@@ -22,12 +21,6 @@ func processPresenceEvent(userID string, event apitypes.PresenceEventBody) error
 		ua = db.CreateUserActivity(userID)
 	}
 
-	// debug ua
-	uaBytes, err := json.Marshal(ua)
-	if err == nil {
-		fmt.Printf("User activity (1): %s\n", string(uaBytes))
-	}
-
 	if strings.EqualFold(ua.Presence, "OFFLINE") && !strings.EqualFold(event.PresenceDefinition.SystemPresence, "OFFLINE") {
 		// Refresh user's config when they come back online
 		ua.RefreshUser()
@@ -39,12 +32,6 @@ func processPresenceEvent(userID string, event apitypes.PresenceEventBody) error
 
 	// Check
 	ua.CheckActivity()
-
-	// debug ua
-	uaBytes, err = json.Marshal(ua)
-	if err == nil {
-		fmt.Printf("User activity (2): %s\n", string(uaBytes))
-	}
 
 	// Write to database
 	if err := db.WriteUserActivity(*ua, false); err != nil {
@@ -68,23 +55,11 @@ func processConversationSummaryEvent(userID string, event apitypes.ConversationS
 		ua = db.CreateUserActivity(userID)
 	}
 
-	// debug ua
-	uaBytes, err := json.Marshal(ua)
-	if err == nil {
-		fmt.Printf("User activity (1): %s\n", string(uaBytes))
-	}
-
 	// Set current conversations
 	ua.UpdateConversations(event)
 
 	// Check
 	ua.CheckActivity()
-
-	// debug ua
-	uaBytes, err = json.Marshal(ua)
-	if err == nil {
-		fmt.Printf("User activity (2): %s\n", string(uaBytes))
-	}
 
 	// Write to database
 	if err := db.WriteUserActivity(*ua, false); err != nil {

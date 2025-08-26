@@ -22,11 +22,11 @@ type TimeoutGroup struct {
 var TimeoutGroups = map[string]TimeoutGroup{
 	"e613e69c-a2d4-40fc-aba5-a9a5eb43eeef": {
 		Name:           "Timeout Group - agents",
-		TimeoutMinutes: 60,
+		TimeoutMinutes: 15,
 	},
 	"f42fd8d0-3c9b-4db4-b389-c845fcef92c9": {
 		Name:           "Timeout Group - supervisors",
-		TimeoutMinutes: 20,
+		TimeoutMinutes: 60,
 	},
 }
 

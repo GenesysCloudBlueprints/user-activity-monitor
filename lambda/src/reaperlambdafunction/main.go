@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -30,12 +29,6 @@ func handleRequest() error {
 	uaList, err := db.ListUserActivity(true, &now)
 	if err != nil {
 		return fmt.Errorf("failed to list UserActivity: %v", err)
-	}
-
-	// debug uaList
-	uaListBytes, err := json.Marshal(uaList)
-	if err == nil {
-		fmt.Printf("User activity list: %s\n", string(uaListBytes))
 	}
 
 	// Reauth if there are any pending user activities (the token can expire if the lambda function is kept warm for too long)

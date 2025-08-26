@@ -36,7 +36,7 @@ func handleRequest(ctx context.Context, event interface{}) error {
 		return fmt.Errorf("failed to marshal event: %v", err)
 	} else {
 		// DEBUG
-		fmt.Printf("Received event: %s\n", string(eventBytes))
+		// fmt.Printf("Received event: %s\n", string(eventBytes))
 	}
 
 	// Unmarshal event
