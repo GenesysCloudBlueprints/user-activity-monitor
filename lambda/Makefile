@@ -13,6 +13,8 @@ build:
 	cd dist/reaperlambdafunction && zip reaperlambdafunction.zip bootstrap
 	GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o dist/reportlambdafunction/bootstrap src/reportlambdafunction/*.go
 	cd dist/reportlambdafunction && zip reportlambdafunction.zip bootstrap
+	GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o dist/callbacklambdafunction/bootstrap src/callbacklambdafunction/*.go
+	cd dist/callbacklambdafunction && zip callbacklambdafunction.zip bootstrap
 	@echo "Build completed successfully!"
 
 # Deploy to dev environment
