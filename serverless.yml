@@ -8,12 +8,15 @@ plugins:
 # Variables
 custom:
   genesysCloud:
-    # Genesys Cloud details https://help.mypurecloud.com/articles/configure-the-amazon-eventbridge-integration/
-    genesysCloudOrgId: 00000000-0000-0000-0000-000000000000
+    # Genesys Cloud details https://help.genesys.cloud/articles/configure-the-amazon-eventbridge-integration/
+    genesysCloudOrgId: YOUR_GENESYS_ORG_ID_HERE
     genesysCloudEventSourceSuffix: user-activity-monitor
     # Partner event source https://developer.genesys.cloud/notificationsalerts/notifications/event-bridge#manage-your-amazon-eventbridge-partner-source
     eventSource: "aws.partner/genesys.com/cloud/${self:custom.genesysCloud.genesysCloudOrgId}/${self:custom.genesysCloud.genesysCloudEventSourceSuffix}"
-    implicitGrantClientId: 00000000-0000-0000-0000-000000000000
+    # Client Credentials OAuth Client ID (for backend Lambda functions)
+    clientCredentialsClientId: YOUR_BACKEND_CLIENT_ID_HERE
+    # Code Authorization OAuth Client ID (for frontend user login)
+    codeAuthClientId: YOUR_FRONTEND_CLIENT_ID_HERE
 
   # serverless-plugin-log-retention
   logRetentionInDays: 30
@@ -30,7 +33,7 @@ provider:
   environment:
     DYNAMODB_TABLE: ${self:service}-${self:provider.stage}
     DYNAMODB_GSI_LIST: ${self:service}-${self:provider.stage}-list-gsi
-    GENESYS_API_DOMAIN: mypurecloud.com
+    GENESYS_API_DOMAIN: YOUR_GENESYS_DOMAIN_HERE  # e.g., mypurecloud.com, mypurecloud.ie, mypurecloud.com.au, etc.
     GENESYS_CREDENTIALS_SECRET_NAME: user-activity-monitor-client-credentials
   iam:
     role:
@@ -111,18 +114,39 @@ functions:
       - http:
           path: /report
           method: GET
+          cors: true
       - http:
           path: /report/data
           method: GET
+          cors: true
     environment:
       DYNAMODB_TABLE: ${self:provider.environment.DYNAMODB_TABLE}
       DYNAMODB_GSI_LIST: ${self:provider.environment.DYNAMODB_GSI_LIST}
       EXPECTED_ORGANIZATION_ID: ${self:custom.genesysCloud.genesysCloudOrgId}
-      IMPLICIT_GRANT_CLIENT_ID: ${self:custom.genesysCloud.implicitGrantClientId}
+      CODE_AUTH_CLIENT_ID: ${self:custom.genesysCloud.codeAuthClientId}
+      GENESYS_API_DOMAIN: ${self:provider.environment.GENESYS_API_DOMAIN}
     tags:
       Service: ${self:service}
       Environment: ${self:provider.stage}
       Function: GenerateReport
+
+  OAuthCallback:
+    handler: bootstrap
+    package:
+      artifact:
+        - lambda/dist/callbacklambdafunction/callbacklambdafunction.zip
+    events:
+      - http:
+          path: /callback
+          method: GET
+          cors: true
+    environment:
+      CODE_AUTH_CLIENT_ID: ${self:custom.genesysCloud.codeAuthClientId}
+      GENESYS_API_DOMAIN: ${self:provider.environment.GENESYS_API_DOMAIN}
+    tags:
+      Service: ${self:service}
+      Environment: ${self:provider.stage}
+      Function: OAuthCallback
 
 resources:
   Resources:

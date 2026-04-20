@@ -66,7 +66,10 @@ func handleRequestLogger(ctx context.Context, request events.APIGatewayProxyRequ
 }
 
 func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (Response, error) {
-	switch request.Path {
+	// Use Resource instead of Path to avoid stage prefix issues
+	path := request.Resource
+	
+	switch path {
 	case "/report/data":
 		{
 			// Validate authorization
@@ -142,6 +145,16 @@ func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 				}, nil
 			}
 
+			// Inject configuration into HTML
+			htmlContent := string(htmlBytes)
+			clientID := os.Getenv("CODE_AUTH_CLIENT_ID")
+			apiDomain := os.Getenv("GENESYS_API_DOMAIN")
+			
+			// Replace placeholders
+			htmlContent = strings.ReplaceAll(htmlContent, "{{CLIENT_ID}}", clientID)
+			htmlContent = strings.ReplaceAll(htmlContent, "{{GENESYS_DOMAIN}}", apiDomain)
+			htmlContent = strings.ReplaceAll(htmlContent, "{{API_STAGE}}", request.RequestContext.Stage)
+
 			// Return the embedded HTML content
 			return Response{
 				StatusCode: 200,
@@ -149,7 +162,7 @@ func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 					"Content-Type":  "text/html",
 					"Cache-Control": "no-cache, no-store, must-revalidate",
 				},
-				Body: string(htmlBytes),
+				Body: htmlContent,
 			}, nil
 		}
 	}
@@ -161,19 +174,23 @@ func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 }
 
 func validateAuthorization(request events.APIGatewayProxyRequest) error {
-	// Check if Authorization header exists and has the correct format
+	// Get token from Authorization header
 	authHeader := request.Headers["Authorization"]
+	if authHeader == "" {
+		authHeader = request.Headers["authorization"] // Try lowercase
+	}
+	
 	if authHeader == "" {
 		return fmt.Errorf("missing Authorization header")
 	}
 
-	// Check if it starts with "Bearer "
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return fmt.Errorf("invalid Authorization header format, expected 'Bearer {token}'")
+	// Extract Bearer token
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		return fmt.Errorf("invalid Authorization header format")
 	}
-
-	// Extract the token
-	token := strings.TrimPrefix(authHeader, "Bearer ")
+	
+	token := parts[1]
 	if token == "" {
 		return fmt.Errorf("empty token in Authorization header")
 	}
@@ -190,7 +207,7 @@ func validateAuthorization(request events.APIGatewayProxyRequest) error {
 		return fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
-	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -216,6 +233,23 @@ func validateAuthorization(request events.APIGatewayProxyRequest) error {
 	}
 
 	return nil
+}
+
+func getTokenFromCookie(cookieHeader string) (string, error) {
+	if cookieHeader == "" {
+		return "", fmt.Errorf("no cookie header found")
+	}
+
+	cookies := strings.Split(cookieHeader, ";")
+	for _, cookie := range cookies {
+		cookie = strings.TrimSpace(cookie)
+		parts := strings.SplitN(cookie, "=", 2)
+		if len(parts) == 2 && parts[0] == "genesys_session" {
+			return parts[1], nil
+		}
+	}
+
+	return "", fmt.Errorf("genesys_session cookie not found")
 }
 
 func extendUserActivity(userActivity []db.UserActivity, status string) ([]ExtendedUserActivity, error) {

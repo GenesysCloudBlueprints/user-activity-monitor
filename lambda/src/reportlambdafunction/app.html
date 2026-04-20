@@ -421,12 +421,11 @@
     </div>
 
     <script>
-      // Configuration
-      const CLIENT_ID = "00000000-0000-0000-0000-000000000000";
-      const REDIRECT_URI = window.location.origin + "/deploy/report";
-      const AUTH_URL = `https://login.mypurecloud.com/oauth/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(
-        REDIRECT_URI
-      )}`;
+      // Configuration - injected by backend
+      const CLIENT_ID = "{{CLIENT_ID}}";
+      const GENESYS_DOMAIN = "{{GENESYS_DOMAIN}}";
+      const API_STAGE = "{{API_STAGE}}";
+      const CALLBACK_URI = window.location.origin + "/" + API_STAGE + "/callback";
 
       // DOM elements
       const authSection = document.getElementById("auth-section");
@@ -449,36 +448,30 @@
       });
 
       function initializeApp() {
-        // Check for access token in URL fragment first
-        checkUrlFragment();
+        // Check for access token in URL hash (from OAuth callback)
+        if (window.location.hash) {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          const accessToken = hashParams.get('access_token');
+          if (accessToken) {
+            // Store token in localStorage
+            localStorage.setItem('genesys_access_token', accessToken);
+            // Clear hash from URL
+            window.location.hash = '';
+          }
+        }
 
-        // Then check local storage
-        const token = localStorage.getItem("genesys_auth_token");
-
-        if (token) {
+        // Check if we have a stored access token
+        if (hasAccessToken()) {
           // Token exists, load data
-          loadReportData(token);
+          loadReportData();
         } else {
           // No token, show auth section
           showAuthSection();
         }
       }
 
-      function checkUrlFragment() {
-        const fragment = window.location.hash.substring(1);
-        const params = new URLSearchParams(fragment);
-        const accessToken = params.get("access_token");
-
-        if (accessToken) {
-          // Store token in local storage
-          localStorage.setItem("genesys_auth_token", accessToken);
-
-          // Remove the fragment from URL
-          window.location.hash = "";
-
-          // Reload the page to start fresh
-          window.location.reload();
-        }
+      function hasAccessToken() {
+        return localStorage.getItem('genesys_access_token') !== null;
       }
 
       function showAuthSection() {
@@ -487,8 +480,57 @@
         dataSection.style.display = "none";
         errorSection.style.display = "none";
 
-        // Set up login button
-        loginButton.href = AUTH_URL;
+        // Set up login button with PKCE
+        loginButton.onclick = function(e) {
+          e.preventDefault();
+          initiateOAuthFlow();
+        };
+      }
+
+      async function initiateOAuthFlow() {
+        try {
+          // Generate PKCE parameters
+          const codeVerifier = generateCodeVerifier();
+          const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+          // Store code verifier in cookie for callback
+          document.cookie = `pkce_code_verifier=${codeVerifier}; Path=/; Max-Age=600; Secure; SameSite=Lax`;
+
+          // Build authorization URL
+          const authUrl = `https://login.${GENESYS_DOMAIN}/oauth/authorize?` +
+            `client_id=${encodeURIComponent(CLIENT_ID)}` +
+            `&response_type=code` +
+            `&redirect_uri=${encodeURIComponent(CALLBACK_URI)}` +
+            `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+            `&code_challenge_method=S256`;
+
+          // Redirect to authorization URL
+          window.location.href = authUrl;
+        } catch (error) {
+          console.error("Error initiating OAuth flow:", error);
+          showError(`Failed to initiate login: ${error.message}`);
+        }
+      }
+
+      function generateCodeVerifier() {
+        const array = new Uint8Array(32);
+        crypto.getRandomValues(array);
+        return base64URLEncode(array);
+      }
+
+      async function generateCodeChallenge(verifier) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(verifier);
+        const hash = await crypto.subtle.digest('SHA-256', data);
+        return base64URLEncode(new Uint8Array(hash));
+      }
+
+      function base64URLEncode(buffer) {
+        const base64 = btoa(String.fromCharCode.apply(null, buffer));
+        return base64
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=/g, '');
       }
 
       function showLoading() {
@@ -513,20 +555,26 @@
         dataSection.style.display = "block";
       }
 
-      async function loadReportData(token) {
+      async function loadReportData() {
         showLoading();
 
         try {
-          const response = await fetch("/deploy/report/data", {
+          const token = localStorage.getItem('genesys_access_token');
+          if (!token) {
+            showAuthSection();
+            return;
+          }
+
+          const response = await fetch("/" + API_STAGE + "/report/data", {
             headers: {
-              Authorization: `Bearer ${token}`,
-            },
+              'Authorization': 'Bearer ' + token
+            }
           });
 
           if (!response.ok) {
             if (response.status === 401) {
-              // Token expired or invalid, clear it and show auth
-              localStorage.removeItem("genesys_auth_token");
+              // Token expired or invalid, clear and show auth
+              clearSession();
               showAuthSection();
               return;
             }
@@ -540,6 +588,11 @@
           console.error("Error loading report data:", error);
           showError(`Failed to load report data: ${error.message}`);
         }
+      }
+
+      function clearSession() {
+        // Clear access token from localStorage
+        localStorage.removeItem('genesys_access_token');
       }
 
       function displayReportData(data) {
@@ -718,7 +771,7 @@
 
       // Handle logout (optional feature)
       function logout() {
-        localStorage.removeItem("genesys_auth_token");
+        clearSession();
         window.location.reload();
       }
 
@@ -821,7 +874,7 @@
           });
         } else {
           // Reset to original order - reload data to restore original order
-          loadReportData(localStorage.getItem("genesys_auth_token"));
+          loadReportData();
           return;
         }
 
