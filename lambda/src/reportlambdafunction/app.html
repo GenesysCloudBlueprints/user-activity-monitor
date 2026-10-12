@@ -442,21 +442,47 @@
       let currentSortDirection = null;
       let tableData = [];
 
+      // Message name used for the popup -> opener auth handshake.
+      const AUTH_POPUP_MESSAGE_NAME = "gc_auth_popup";
+
       // Initialize the application
       document.addEventListener("DOMContentLoaded", function () {
         initializeApp();
       });
 
       function initializeApp() {
-        // Check for access token in URL hash (from OAuth callback)
+        // Detect whether this page is running inside the auth popup after
+        // Genesys (and the callback Lambda) redirected back to
+        // /report#access_token=... The redirect to the top window is now
+        // deprecated for iframe-embedded apps, so authentication happens in a
+        // popup/new tab and the result is handed back to the opener via
+        // postMessage.
+        const inAuthPopup =
+          typeof window !== "undefined" &&
+          !!window.opener &&
+          window.opener !== window &&
+          /[#&]access_token=/.test(window.location.hash);
+
+        if (inAuthPopup) {
+          // Running inside the popup after the callback Lambda redirected here
+          // with the access token in the URL hash. Hand the token back to the
+          // opener so its waiting promise resolves; do NOT load the dashboard
+          // or any data here.
+          completeAuthInPopup();
+          return;
+        }
+
+        // Not in a popup. If there's an access token in the URL hash, it came
+        // from the full-page-redirect fallback (popup blocked), so store it and
+        // clean up the URL.
         if (window.location.hash) {
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const accessToken = hashParams.get('access_token');
+          const hashParams = new URLSearchParams(
+            window.location.hash.substring(1)
+          );
+          const accessToken = hashParams.get("access_token");
           if (accessToken) {
-            // Store token in localStorage
-            localStorage.setItem('genesys_access_token', accessToken);
-            // Clear hash from URL
-            window.location.hash = '';
+            localStorage.setItem("genesys_access_token", accessToken);
+            window.location.hash = "";
           }
         }
 
@@ -468,6 +494,36 @@
           // No token, show auth section
           showAuthSection();
         }
+      }
+
+      // Popup-side handoff: post the access token back to the opener, targeting
+      // the opener's exact origin (never '*'), then close.
+      function completeAuthInPopup() {
+        const opener = window.opener;
+        if (!opener) {
+          // No opener to hand the result to — nothing we can safely do. Do NOT
+          // fall through to the dashboard init.
+          console.error(
+            "Popup auth completion failed: no window.opener to notify."
+          );
+          return;
+        }
+
+        // The opener and this popup are served from the same backend, so the
+        // opener's origin is this window's origin.
+        const openerOrigin = window.location.origin;
+        opener.postMessage(
+          {
+            name: AUTH_POPUP_MESSAGE_NAME,
+            type: "message",
+            search: window.location.search,
+            hash: window.location.hash,
+          },
+          openerOrigin
+        );
+
+        // Close the popup; the opener has what it needs.
+        window.close();
       }
 
       function hasAccessToken() {
@@ -504,12 +560,88 @@
             `&code_challenge=${encodeURIComponent(codeChallenge)}` +
             `&code_challenge_method=S256`;
 
-          // Redirect to authorization URL
-          window.location.href = authUrl;
+          // Open the Genesys login in a popup instead of navigating the top
+          // window. Embedding the Genesys login in an iframe is deprecated, and
+          // a popup keeps this report page intact while the user authenticates.
+          openAuthPopup(authUrl);
         } catch (error) {
           console.error("Error initiating OAuth flow:", error);
           showError(`Failed to initiate login: ${error.message}`);
         }
+      }
+
+      // Opener-side: open the auth popup and wait for it to post the token back.
+      function openAuthPopup(authUrl) {
+        const width = 500;
+        const height = 650;
+        // Center the popup over the current window.
+        const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+        const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+        const features =
+          `width=${width},height=${height},left=${left},top=${top},` +
+          `resizable=yes,scrollbars=yes,status=yes`;
+
+        const popup = window.open(authUrl, "gc_auth_popup", features);
+
+        if (!popup) {
+          // Popup was blocked. Fall back to a full-page redirect so login still
+          // works; the callback Lambda will redirect the top window back to
+          // /report#access_token=... which initializeApp() reads on load.
+          console.warn(
+            "Auth popup was blocked; falling back to full-page redirect."
+          );
+          window.location.href = authUrl;
+          return;
+        }
+
+        // Listener for the token handed back from the popup. Validate the
+        // origin and message shape before trusting it.
+        function handleAuthMessage(event) {
+          if (event.origin !== window.location.origin) {
+            return;
+          }
+          const data = event.data;
+          if (
+            !data ||
+            data.name !== AUTH_POPUP_MESSAGE_NAME ||
+            data.type !== "message"
+          ) {
+            return;
+          }
+
+          window.removeEventListener("message", handleAuthMessage);
+          if (pollPopupClosed) {
+            clearInterval(pollPopupClosed);
+          }
+          try {
+            popup.close();
+          } catch (e) {
+            // Ignore: popup may already be closed.
+          }
+
+          // Extract the access token from the hash the popup sent back.
+          const hash = (data.hash || "").replace(/^#/, "");
+          const hashParams = new URLSearchParams(hash);
+          const accessToken = hashParams.get("access_token");
+
+          if (accessToken) {
+            localStorage.setItem("genesys_access_token", accessToken);
+            loadReportData();
+          } else {
+            showError("Login failed: no access token was returned.");
+          }
+        }
+
+        window.addEventListener("message", handleAuthMessage);
+
+        // Detect if the user closes the popup without completing login so we
+        // can stop listening and leave the auth section visible.
+        const pollPopupClosed = setInterval(function () {
+          if (popup.closed) {
+            clearInterval(pollPopupClosed);
+            window.removeEventListener("message", handleAuthMessage);
+          }
+        }, 500);
       }
 
       function generateCodeVerifier() {
